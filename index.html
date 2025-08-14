@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0a3d62" />
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<title>SeaGuard v4.5 — Field Test</title>
+<style>
+:root { --padb: env(safe-area-inset-bottom, 0px); --padt: env(safe-area-inset-top, 0px); }
+*{box-sizing:border-box}
+html, body { margin:0; padding:0; height:100%; background:#061a2b; color:#eaf2f9; font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+#app { position:fixed; inset:0; display:flex; flex-direction:column; }
+header { position:relative; z-index:6; background:#0a3d62; padding:8px 12px calc(6px + var(--padt)) 12px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+header h1 { margin:0; font-size:18px; }
+button { cursor:pointer; }
+.toolbar { display:flex; gap:12px; }
+.btn { padding:12px 14px; border-radius:10px; border:1px solid #214d78; background:#0b3357; color:#eaf2f9; font-weight:700; }
+.btn.primary { background:#1e90ff; border-color:#1e90ff; color:#001221; }
+.btn.danger { background:#ff4757; border-color:#ff4757; }
+#dropdown { position:absolute; left:0; right:0; top:100%; background:#0c2742; border-bottom:1px solid #214d78; box-shadow:0 10px 30px rgba(0,0,0,.35); display:none; z-index:9999; }
+#dropdown.open { display:block; }
+#dropdown .inner { padding:12px; display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px; max-height:72vh; overflow:auto; }
+.card { background:#07233b; border:1px solid #214d78; border-radius:10px; padding:10px; }
+label { display:block; font-size:13px; opacity:0.9; margin-bottom:4px; }
+select, input[type=number] { width:100%; padding:10px; border-radius:8px; border:1px solid #214d78; background:#0b3357; color:#eaf2f9; }
+main { position:relative; flex:1; }
+#stage { position:absolute; inset:0; background:#001221; }
+video, canvas#overlay { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+#guide { position:absolute; inset:0; background:rgba(0,0,0,0.65); display:none; align-items:center; justify-content:center; flex-direction:column; z-index:7; text-align:center; }
+#guide svg { width: 56vw; max-width: 520px; height: auto; }
+#guide .meta { margin-top:10px; font-size:18px; }
+#guide .close { position:absolute; top:12px; right:12px; padding:10px 12px; border-radius:12px; background:#ff4757; color:#fff; border:none; font-weight:800; }
+#mapCanvas { position:absolute; left:10px; bottom:calc(56px + var(--padb)); width:240px; height:160px; background:#061a2b; border:1px solid #214d78; border-radius:8px; display:none; z-index:4; }
+#hud { position:absolute; left:0; right:0; top:0; padding:8px 10px; display:none; justify-content:center; z-index:5; }
+.badge { padding:4px 8px; border-radius:999px; border:1px solid #214d78; background:#0b3357; }
+#fsBtn { position:absolute; right:12px; bottom: calc(14px + var(--padb)); z-index:8; padding:14px 16px; border-radius:14px; background:#0b3357; border:1px solid #214d78; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>SeaGuard v4.5 <span style="font-size:12px;opacity:.8">Field Test</span></h1>
+    <div class="toolbar">
+      <button id="mapToggle" class="btn">Mappa</button>
+      <button id="menuToggle" class="btn">☰ Menu</button>
+    </div>
+    <div id="dropdown">
+      <div class="inner">
+        <div class="card">
+          <strong>Operatività</strong>
+          <label>Modalità</label>
+          <select id="modeSelect">
+            <option value="live" selected>Live camera</option>
+            <option value="demo">Demo (scomparse casuali)</option>
+          </select>
+          <label style="margin-top:8px;">Fotocamera</label>
+          <select id="cameraSelect">
+            <option value="env">Posteriore (grandangolo)</option>
+            <option value="user">Anteriore (selfie)</option>
+          </select>
+          <label style="margin-top:8px;">FOV orizzontale (°)</label>
+          <input id="fovDeg" type="number" min="40" max="120" step="1" value="70">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+            <button id="startBtn" class="btn primary">Avvia sessione</button>
+            <button id="stopBtn" class="btn danger">Stop</button>
+          </div>
+          <button id="simulateBtn" style="margin-top:8px;">Simula ALLARME ORA</button>
+        </div>
+        <div class="card">
+          <strong>Maschera acqua (OBBLIGATORIA)</strong>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <button id="roiBtn" class="btn">Disegna ROI</button>
+            <button id="clearRoiBtn" class="btn">Cancella ROI</button>
+          </div>
+          <label style="margin-top:8px;">Linea orizzonte (% altezza, parte alta ignorata)</label>
+          <input id="horizonPct" type="number" min="10" max="70" step="1" value="35">
+        </div>
+        <div class="card">
+          <strong>Allarme</strong>
+          <label>Hit consecutivi K</label>
+          <input id="hitK" type="number" min="1" max="15" step="1" value="4">
+          <label>Miss consecutivi M</label>
+          <input id="missM" type="number" min="5" max="60" step="1" value="22">
+          <label>Cooldown allerta (s)</label>
+          <input id="cooldownSec" type="number" min="2" max="60" step="1" value="12">
+        </div>
+        <div class="card">
+          <strong>Meteo & Correnti</strong>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <button id="refreshMeteoBtn" class="btn">Aggiorna correnti (Open‑Meteo)</button>
+            <button id="toggleMeteoBtn" class="btn">Usa correnti: ON</button>
+          </div>
+          <div id="meteoInfo" style="font-size:12px;opacity:.9;margin-top:6px;">—</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="stage">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <canvas id="mapCanvas"></canvas>
+      <div id="guide">
+        <button class="close" id="guideClose">Chiudi</button>
+        <svg viewBox="0 0 200 200">
+          <polygon id="arrow" points="100,10 135,90 115,90 115,190 85,190 85,90 65,90" fill="#ff4757" stroke="#ffffff" stroke-width="4"/>
+        </svg>
+        <div class="meta" id="guideTitle">—</div>
+        <div class="meta" id="guideMeta">—</div>
+        <div class="meta" id="gpsMeta">GPS: -- · Bussola: --</div>
+      </div>
+      <div id="hud" class="badge">—</div>
+      <button id="fsBtn" class="btn">Schermo intero</button>
+    </section>
+  </main>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
